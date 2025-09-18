@@ -1,4 +1,25 @@
-# Byte-compiled / optimized / DLL files
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# Environments
+.env
+.venv/
+venv/
+
+# App data
+uploads/
+database/
+
+# IDE
+.idea/
+.vscode/# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class

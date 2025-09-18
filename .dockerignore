@@ -1,0 +1,16 @@
+.venv
+__pycache__
+*.pyc
+*.log
+uploads
+database
+database/vector_db
+*.faiss
+*.json
+.env
+*.ipynb
+tests/__pycache__
+dist
+build
+*.egg-info
+.DS_Store

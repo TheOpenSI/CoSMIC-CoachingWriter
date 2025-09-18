@@ -1,0 +1,84 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - ollama:/root/.ollama
+      - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
+    restart: unless-stopped
+
+  coaching-writer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cosmic-coaching-writer:latest
+    container_name: coaching-writer
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - LLM_NAME=ollama:gemma2:2b
+      - VECTOR_DB_PATH=database/vector_db
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - RETRIEVE_TOPK=5
+      - RETRIEVE_SCORE_THRESHOLD=0.7
+      - VECTOR_DB_UPDATE_THRESHOLD=0.98
+      - MAX_NEW_TOKENS=512
+      - COACH_STYLE=supportive, concise, academically rigorous
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+
+  open-webui:
+    build:
+      context: ../OpenWebUI-CoSMIC
+      dockerfile: Dockerfile
+    image: opensicbr/openwebui-cosmic:standalone
+    container_name: openwebui
+    environment:
+      - OLLAMA_BASE_URL=http://coaching-writer:8001
+      - OLLAMA_BASE_URLS=http://coaching-writer:8001
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_OPENAI_API=false
+      - ENABLE_OAUTH_SIGNUP=false
+      - WEBUI_SECRET_KEY=dev-secret
+      - DEFAULT_MODELS=gemma2:2b
+    volumes:
+      - ../OpenWebUI-CoSMIC:/app/src:ro
+      - ./config.yaml:/app/src/shared/config.yaml:ro
+    depends_on:
+      coaching-writer:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: cw_pipelines
+    environment:
+      - OPENSI_COSMIC_API_BASE_URL=http://coaching-writer:8001
+      - MAX_QUERIES_PER_USER=10
+      - PIPELINES_URLS=file:///ext_pipelines/coaching_writer_pipeline.py
+    volumes:
+      - ./pipelines:/ext_pipelines:ro
+    depends_on:
+      coaching-writer:
+        condition: service_started
+    ports:
+      - "9099:9099"
+    restart: unless-stopped
+    profiles: ["pipelines"]
+
+volumes:
+  ollama: {}

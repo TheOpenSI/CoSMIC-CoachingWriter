@@ -1,0 +1,11 @@
+llm_name: "ollama:gemma2:2b"
+rag:
+  topk: 5
+  retrieve_score_threshold: 0.7
+  vector_db_path: "database/vector_db"
+  update_threshold: 0.98
+embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+device: "cpu"
+coach:
+  max_new_tokens: 512
+  style: "supportive, concise, academically rigorous"
