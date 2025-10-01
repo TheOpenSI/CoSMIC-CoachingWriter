@@ -1,3 +1,8 @@
+# docker-compose.yaml
+# --------------------
+# Orchestrates multi-container setup for CoSMIC Coaching Writer.
+# Provides API service plus optional supporting services.
+
 services:
   ollama:
     image: ollama/ollama:latest
@@ -37,6 +42,8 @@ services:
       - "8001:8001"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./vector_db:/app/database/vector_db
+      - ./academic-texts:/app/academic-texts
     restart: unless-stopped
 
   open-webui:
@@ -49,10 +56,12 @@ services:
       - OLLAMA_BASE_URL=http://coaching-writer:8001
       - OLLAMA_BASE_URLS=http://coaching-writer:8001
       - ENABLE_OLLAMA_API=true
-      - ENABLE_OPENAI_API=false
+      - ENABLE_OPENAI_API=true
       - ENABLE_OAUTH_SIGNUP=false
       - WEBUI_SECRET_KEY=dev-secret
       - DEFAULT_MODELS=gemma2:2b
+      - ENABLE_PIPELINES=true
+      - PIPELINES_URL=http://pipelines:9099
     volumes:
       - ../OpenWebUI-CoSMIC:/app/src:ro
       - ./config.yaml:/app/src/shared/config.yaml:ro
@@ -78,7 +87,6 @@ services:
     ports:
       - "9099:9099"
     restart: unless-stopped
-    profiles: ["pipelines"]
 
 volumes:
   ollama: {}

@@ -1,6 +1,15 @@
 #!/usr/bin/env sh
 set -e
 
+# ollama-entrypoint.sh
+# --------------------
+# Entrypoint script for the Ollama container.
+# Responsibilities:
+# - Start the Ollama server in the background.
+# - Wait until the Ollama API becomes responsive.
+# - Ensure that the required model (gemma2:2b) is pulled and available.
+# - Attach to the Ollama server process.
+
 echo "[ollama-entrypoint] Starting ollama server..."
 ollama serve &
 PID=$!

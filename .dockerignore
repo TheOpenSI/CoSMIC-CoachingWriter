@@ -5,16 +5,6 @@ __pycache__
 uploads
 database
 database/vector_db
-# virtual envs
-.venv/
-venv/
-env/
-# editor
-.vscode/
-.idea/
-# tests caches
-.pytest_cache/
-__pycache__/
 *.faiss
 *.json
 .env

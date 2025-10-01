@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# entrypoint.sh
+# -------------
+# Entrypoint for the Coaching Writer FastAPI service.
+# Responsibilities:
+# - Load environment variables from `.env` if present.
+# - Start Uvicorn server serving the `app.main:app` application.
+# - Support live-reload in development mode (via RELOAD=true).
+
 if [ -f /app/.env ]; then
   echo "[entrypoint] Loading .env"
   set -a; source /app/.env; set +a

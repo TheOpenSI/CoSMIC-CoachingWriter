@@ -1,4 +1,29 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+"""
+api_routes.py
+-------------
+
+This module defines the REST API endpoints for the **CoSMIC Coaching Writer** service.  
+It provides three categories of interfaces:
+
+1. **Custom Coaching API**  
+   - `/coach/query`: Core endpoint for handling coaching queries.  
+   - `/documents/*`: Uploading, ingesting, and listing documents.  
+
+2. **OpenAI-Compatible API**  
+   Minimal endpoints (`/v1/models`, `/v1/chat/completions`) to allow clients 
+   expecting an OpenAI API surface to interact seamlessly with the Coaching Writer.  
+
+3. **Ollama-Compatible API**  
+   Minimal endpoints (`/api/*`) for interoperability with Ollama-style clients.  
+
+Key Features:
+- Retrieval-Augmented Generation (RAG) toggle support (`/norag` directive).  
+- Supports streaming and non-streaming responses.  
+- Provides health check endpoint for monitoring.  
+- Normalizes incoming model names to the configured base LLM.  
+"""
+
+from fastapi import APIRouter, UploadFile, Query, File, HTTPException
 from fastapi.responses import StreamingResponse
 import os, shutil, time, uuid, json
 from ..schemas.requests import QueryRequest, TextIngestRequest
@@ -8,7 +33,6 @@ from ..services.vector_database import vector_db_singleton
 from ..core.config import settings
 
 router = APIRouter()
-
 
 @router.get("/health", response_model=HealthResponse)
 def health():
@@ -36,6 +60,12 @@ def upload_document(file: UploadFile = File(...)):
 def ingest_text(payload: TextIngestRequest):
     status = vector_db_singleton.add_text(payload.text)
     return {"status": "added" if status == 0 else "skipped"}
+
+
+@router.post("/documents/ingest-folder")
+def ingest_folder(path: str = Query(..., description="Path to folder containing PDFs")):
+    count = vector_db_singleton.add_pdf_folder(path)
+    return {"status": "completed", "pdfs_added": count}
 
 
 @router.get("/documents")
