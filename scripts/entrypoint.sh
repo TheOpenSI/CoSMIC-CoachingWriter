@@ -14,6 +14,11 @@ if [ -f /app/.env ]; then
   set -a; source /app/.env; set +a
 fi
 
+# Reset file_list.csv each time the container starts
+mkdir -p /app/database/vector_db
+echo "Source,Time,Comment" > /app/database/vector_db/file_list.csv
+echo "[entrypoint] Reset file_list.csv"
+
 echo "[entrypoint] Starting Uvicorn on :8001 (reload=${RELOAD:-false})"
 
 if [ "${RELOAD:-false}" = "true" ]; then
