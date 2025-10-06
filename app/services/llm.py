@@ -52,6 +52,7 @@ class OllamaChat(ServiceBase):
             "- When discussing improvements, point out clarity, argument strength, structure, tone, methodology, and use of sources.\n"
             "- Use a friendly, conversational style if the user is just chatting or asking about the tool.\n"
             "- Use a formal, academic style when analyzing or critiquing user-provided texts or assignments.\n"
+            "- If Relevant Context is provided, treat it as the user's draft and analyze it directly—do NOT ask the user to paste their text again.\n"
             "- Explicitly remind the user that you do not generate new text, only guidance."
         )
         if context:
@@ -80,6 +81,7 @@ class OllamaChat(ServiceBase):
             "- When discussing improvements, point out clarity, argument strength, structure, tone, methodology, and use of sources.\n"
             "- Use a friendly, conversational style if the user is just chatting or asking about the tool.\n"
             "- Use a formal, academic style when analyzing or critiquing user-provided texts or assignments.\n"
+            "- If Relevant Context is provided, treat it as the user's draft and analyze it directly—do NOT ask the user to paste their text again.\n"
             "- Explicitly remind the user that you do not generate new text, only guidance."
         )
         if context:

@@ -58,11 +58,11 @@ services:
       - cosmic_net
 
   open-webui:
-    # build:
-    #   context: ../OpenWebUI-CoSMIC
-    #   dockerfile: Dockerfile
-    # image: opensicbr/openwebui-cosmic:standalone
-    image: opensicbr/cosmic_openwebui:latest
+    build:
+       context: ../OpenWebUI-CoSMIC
+       dockerfile: Dockerfile
+    image: opensicbr/openwebui-cosmic:standalone
+    #image: opensicbr/cosmic_openwebui:latest
     container_name: openwebui
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
