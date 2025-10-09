@@ -51,7 +51,7 @@ class CoachingService(ServiceBase):
             prefix = ""
         return prefix + query
 
-    def __call__(self, query: str, use_rag: bool = True, mode: str | None = None):
+    def __call__(self, query: str, use_rag: bool = True, mode: str | None = None, injected_context: str | None = None):
         """
         Generate a coaching response.
 
@@ -72,7 +72,12 @@ class CoachingService(ServiceBase):
         retrieve_scores = []
         sources = []
 
-        if use_rag:
+        if injected_context:
+            # Use provided context directly (e.g., from attached PDFs)
+            context = injected_context
+            retrieve_scores = []
+            sources = [{"id": 0, "score": 1.0, "text": injected_context[:200], "passed_threshold": True}]
+        elif use_rag:
             context, retrieve_scores, sources = self.rag(query)
 
         prompt = self.build_prompt(query, mode=mode)

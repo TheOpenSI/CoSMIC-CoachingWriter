@@ -5,6 +5,7 @@ Defines the data models used as request bodies for API endpoints.
 """
 
 from pydantic import BaseModel
+from typing import Any, List, Union, Optional
 
 
 class QueryRequest(BaseModel):
@@ -19,6 +20,10 @@ class QueryRequest(BaseModel):
     query: str
     use_rag: bool = True
     mode: str | None = None
+    # Optional documents list coming from OpenWebUI pipelines. Items can be:
+    # - string absolute paths (e.g., /app/backend/data/uploads/xxx/file.pdf)
+    # - dictionaries with at least a 'path' key
+    documents: Optional[List[Union[str, dict]]] = None
 
 
 class TextIngestRequest(BaseModel):

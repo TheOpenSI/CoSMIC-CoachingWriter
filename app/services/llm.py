@@ -16,6 +16,8 @@ import requests
 from typing import List, Dict
 from .base import ServiceBase
 from ..core.config import settings
+from ollama import Client
+from .OllamaPullManager import OllamaPullManager
 
 
 class OllamaChat(ServiceBase):
@@ -52,6 +54,7 @@ class OllamaChat(ServiceBase):
             "- When discussing improvements, point out clarity, argument strength, structure, tone, methodology, and use of sources.\n"
             "- Use a friendly, conversational style if the user is just chatting or asking about the tool.\n"
             "- Use a formal, academic style when analyzing or critiquing user-provided texts or assignments.\n"
+            "- If Relevant Context is provided, treat it as the user's draft and analyze it directly—do NOT ask the user to paste their text again.\n"
             "- Explicitly remind the user that you do not generate new text, only guidance."
         )
         if context:
@@ -80,6 +83,7 @@ class OllamaChat(ServiceBase):
             "- When discussing improvements, point out clarity, argument strength, structure, tone, methodology, and use of sources.\n"
             "- Use a friendly, conversational style if the user is just chatting or asking about the tool.\n"
             "- Use a formal, academic style when analyzing or critiquing user-provided texts or assignments.\n"
+            "- If Relevant Context is provided, treat it as the user's draft and analyze it directly—do NOT ask the user to paste their text again.\n"
             "- Explicitly remind the user that you do not generate new text, only guidance."
         )
         if context:
@@ -130,6 +134,25 @@ class OllamaChat(ServiceBase):
                 pass
             return text, text
 
+class ManagedOllamaChat(OllamaChat):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ollama_client = Client(host=self.host)
+        self.pull_manager = OllamaPullManager(
+            model_name=self.llm_name,
+            mode="stochastic",
+            interventions=[85, 95],
+            max_retries=3,
+            fall_back_interval=60,
+            ollama_client=self.ollama_client
+        )
+        # Pull or verify model at startup
+        self.pull_manager.pull_model()
+
+    def __call__(self, question: str, context: str = ""):
+        # Recheck availability before each inference
+        self.pull_manager.pull_model()
+        return super().__call__(question, context)
 
 # Singleton instance
-llm_singleton = OllamaChat()
+llm_singleton = ManagedOllamaChat()
