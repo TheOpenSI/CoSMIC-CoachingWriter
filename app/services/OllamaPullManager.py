@@ -165,8 +165,9 @@ class OllamaPullManager:
             
             self._start_download()
             
-            # Monitor progress until target percentage
-            while self._is_pulling:
+            # Watch progress closely, even for a few seconds after pull ends
+            stalled_checks = 0
+            while stalled_checks < 5:
                 if self._current_percentage >= target_percentage:
                     self._intervention_count += 1
                     self._completed_interventions.append({
@@ -175,13 +176,19 @@ class OllamaPullManager:
                         'actual_percentage': self._current_percentage,
                         'status': 'completed'
                     })
-                    
-                    print(f"\nIntervention {intervention_idx + 1}/5 at {self._current_percentage:.1f}% - "
-                          "Restarting...")
+                    print(f"\n[⚙️ Intervention {intervention_idx + 1}] "
+                        f"Reached {self._current_percentage:.1f}% (Target {target_percentage}%) — restarting...")
                     self._stop_download()
-                    time.sleep(2)  # Brief pause before restart
+                    self._download_thread.join(timeout=10)
+                    self._current_percentage = 0
+                    time.sleep(3)
                     break
-                
+
+                if not self._is_pulling:
+                    stalled_checks += 1
+                else:
+                    stalled_checks = 0
+
                 time.sleep(1)
         
         if self._download_completed:
