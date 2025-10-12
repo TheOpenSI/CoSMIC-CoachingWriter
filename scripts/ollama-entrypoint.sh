@@ -1,16 +1,22 @@
 #!/usr/bin/env sh
 set -e
 
+# -----------------------------------------------------------------------------
 # ollama-entrypoint.sh
-# --------------------
-# Entrypoint script for the Ollama container.
+# -----------------------------------------------------------------------------
+# Purpose:
+#   Container startup script for Ollama model service.
 # Responsibilities:
-# - Start the Ollama server in the background.
-# - Wait until the Ollama API becomes responsive.
-# - Ensure that the required model (gemma2:2b) is pulled and available.
-# - Attach to the Ollama server process.
+#   1. Start Ollama server in the background.
+#   2. Wait until API becomes responsive.
+#   3. Ensure required model (qwen3:4b) is downloaded.
+#   4. Wait up to 10 minutes for completion, then attach.
+# -----------------------------------------------------------------------------
 
-echo "[ollama-entrypoint] Starting ollama server..."
+
+MODEL_NAME="qwen3:4b"
+
+echo "[ollama-entrypoint] Starting Ollama server..."
 ollama serve &
 PID=$!
 
@@ -25,10 +31,27 @@ until ollama list >/dev/null 2>&1; do
   sleep 2
 done
 
-if ! ollama list | grep -q '^gemma2:2b'; then
-  echo "[ollama-entrypoint] Pulling model gemma2:2b..."
-  ollama pull gemma2:2b || true
+echo "[ollama-entrypoint] Ollama API is ready."
+
+# Check if model is already available
+if ollama list | grep -q "^${MODEL_NAME}"; then
+  echo "[ollama-entrypoint] Model ${MODEL_NAME} already present."
+else
+  echo "[ollama-entrypoint] Pulling model ${MODEL_NAME}..."
+  ollama pull "${MODEL_NAME}" || true
+
+  # Wait up to ~10 minutes for the model to appear
+  echo "[ollama-entrypoint] Waiting for model ${MODEL_NAME} to finish downloading..."
+  tries=0
+  until ollama list | grep -q "^${MODEL_NAME}"; do
+    tries=$((tries+1))
+    if [ "$tries" -gt 120 ]; then  # 120 * 5s = 600s = 10 minutes
+      echo "[ollama-entrypoint] Model ${MODEL_NAME} not ready after 10 minutes" >&2
+      exit 1
+    fi
+    sleep 5
+  done
 fi
 
-echo "[ollama-entrypoint] Model check complete; attaching to server"
+echo "[ollama-entrypoint] Model ${MODEL_NAME} is ready. Attaching to server..."
 wait $PID

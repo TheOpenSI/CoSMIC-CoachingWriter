@@ -1,4 +1,4 @@
-# OpenSI-CoSMIC - CochingWriter
+# OpenSI-CoSMIC - Coaching Writer  
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://opensource.org/licenses/MIT)
 [![arXiv](https://img.shields.io/badge/ACIS-2025-oliver.svg)](https://arxiv.org/abs/2408.04910)
@@ -10,84 +10,155 @@
 This is the official implementation of the Open Source Institute-CoSMIC-CoachingWriter v1.0.0.
 
 
-# CoSMIC-CoachingWriter
+## 🌍 Overview
 
-Microservice in the CoSMIC ecosystem that provides an academic writing coaching assistant using a Small Language Model (SLM) (default: `gemma2:2b` via Ollama) with Retrieval-Augmented Generation (RAG).
+**CoSMIC Coaching Writer** is part of the **OpenSI Cognitive System of Machine Intelligent Computing (CoSMIC)** — a framework for explainable, responsible, and human-centered AI in education.
 
-## Key Features
+This service acts as an **academic writing coach**, not a ghostwriter.  
+It analyzes drafts, guides learning, and teaches transferable writing principles using retrieval-augmented feedback and concept-based reasoning.
 
-* Upload academic PDFs to build a private vector knowledge base.
-* RAG-enabled coaching: context-aware suggestions, critique, structure advice.
-* Deterministic, low-temperature responses for clarity and rigor.
-* Lightweight Ollama-based inference (no large GPU mandatory; CPU viable for small models).
-* Simple REST API (FastAPI) for integration with OpenWebUI / other CoSMIC services.
+The system combines:
+- **Retrieval-Augmented Generation (RAG)** for factual and contextual grounding.  
+- **Ollama-based LLMs** (e.g., Qwen, Mistral) for efficient local inference.  
+- **Ethical coaching behavior** enforced through structured prompts and filters.  
+- **OpenAI / Ollama-compatible APIs** for seamless integration with existing tools.
+
+---
+
+## 🎓 Academic & Educational Focus
+
+CoSMIC Coaching Writer is designed for **students, educators, and researchers** who want to:
+- Receive constructive, structured feedback on their writing.  
+- Learn *why* certain phrasing, structure, or tone matters.  
+- Build academic writing competence through self-guided reflection.  
+
+The coach never rewrites or generates essays.  
+Instead, it helps users **analyze, reflect, and improve** their own work through guided conceptual feedback.
+
+---
+
+## ⚙️ Features
+
+✅ **Retrieval-Augmented Context** — integrates sources from PDFs and text.  
+✅ **Pedagogical Feedback Engine** — analyzes clarity, tone, argument, and structure.  
+✅ **Model Flexibility** — supports interchangeable Ollama models via valves.  
+✅ **Academic Integrity** — strictly prohibits rewriting or content generation.  
+✅ **Multi-API Compatibility** — native support for both OpenAI and Ollama-style clients.  
+✅ **Auto-Ingestion of Academic Documents** — syncs PDFs from OpenWebUI or `/uploads`.
+
+---
 
 ## Architecture
 
 ```
-						+-----------------------------+
-						|    OpenWebUI / Client       |
-						+---------------+-------------+
-														|
-														| REST (upload/query)
-														v
- +---------------------------------------------------+
- |            CoSMIC-CoachingWriter Service          |
- |                                                   |
- |  +-----------+    +---------+    +--------------+ |
- |  |  Routes   +--> | Coach   +--> |   Ollama LLM | |
- |  +-----------+    +----+----+    +------+-------+ |
- |                        |                 ^        |
- |                        v                 |        |
- |                 +-------------+   RAG    |        |
- |                 |   RAG       +----------+        |
- |                 +------+------+                    |
- |                        |                           |
- |                 +------+------+                    |
- |                 | Vector DB | (FAISS + Embeddings) |
- |                 +-------------+                    |
- +---------------------------------------------------+
+                      +--------------------------------------+
+                      |        OpenWebUI / Client UI         |
+                      |  (Chat, Uploads, and Query Interface)|
+                      +-------------------+------------------+
+                                          |
+                                          |  REST / HTTP (upload, query)
+                                          v
+    +---------------------------------------------------------------+
+    |              🧩 CoSMIC Coaching Writer Service                 |
+    |---------------------------------------------------------------|
+    |                                                               |
+    |   +----------------+         +-----------------------------+  |
+    |   |   API Routes    | -----> |     Coaching Service        |  |
+    |   | (FastAPI Layer) |         | (RAG + LLM Orchestration)  |  |
+    |   +--------+--------+         +--------------+--------------+  |
+    |            |                                 |                 |
+    |            |                                 v                 |
+    |            |                  +-----------------------------+  |
+    |            |                  |   RAG Retriever             |  |
+    |            |                  |  (Context + Source Lookup)  |  |
+    |            |                  +---------------+-------------+  |
+    |            |                                  |                |
+    |            |                                  v                |
+    |            |                  +-----------------------------+  |
+    |            |                  |  Vector Database (FAISS)    |  |
+    |            |                  |  + Embeddings (MiniLM)      |  |
+    |            |                  +---------------+-------------+  |
+    |            |                                  |                |
+    |            |                                  v                |
+    |            |                  +-----------------------------+  |
+    |            +----------------> |   Ollama LLM Backend        |  |
+    |                               |   (Qwen / Mistral models)   |  |
+    |                               +-----------------------------+  |
+    |                                                               |
+    +---------------------------------------------------------------+
+                                          |
+                                          |  REST / WebSocket APIs
+                                          v
+                  +---------------------------------------------+
+                  |        Pipelines Service (OpenWebUI)        |
+                  |   - External pipeline integration           |
+                  |   - Connects to Coaching Writer API         |
+                  |   - Orchestrates academic workflows         |
+                  +-------------------+-------------------------+
+                                      |
+                                      |  Feedback & Results
+                                      v
+                      +--------------------------------------+
+                      |        OpenWebUI / Client UI         |
+                      |   (Displays responses & insights)    |
+                      +--------------------------------------+
+
 ```
 
 ### Components
 
-| Component | Purpose |
-|-----------|---------|
-| `app/services/llm.py` | Minimal Ollama wrapper; consolidated responses for internal calls. |
-| `app/services/vector_database.py` | FAISS-based vector store for PDF + text ingestion. |
-| `app/services/rag.py` | Retrieves top-k relevant chunks and builds compact context. |
-| `app/services/coach.py` | Orchestrates RAG + LLM to produce coached feedback. |
-| `app/api/routes.py` | REST endpoints (FastAPI). |
+| Layer | File | Role |
+|-------|------|------|
+| **Base Service** | `services/base.py` | Common service utilities (paths, logging). |
+| **Retrieval** | `services/rag.py` | Retrieves and filters relevant text from the vector store. |
+| **Generation** | `services/llm.py` | Wraps Ollama LLMs, enforces coaching rules, filters output. |
+| **Orchestration** | `services/coach.py` | Combines RAG + LLM into context-aware coaching feedback. |
+| **API Layer** | `routes/api_routes.py` | Exposes `/coach/query`, `/documents/*`, and OpenAI/Ollama endpoints. |
 
-## Endpoints
+---
 
-Primary REST endpoints:
+## 🌐 Endpoints
+
+### 🔹 Primary REST API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Service + model status. |
-| POST | `/documents/upload` | Upload a PDF (multipart/form-data). |
-| POST | `/documents/ingest-text` | Add raw text to vector DB. |
-| GET | `/documents` | List ingested sources (from catalogue). |
-| POST | `/coach/query` | Body: `{query, use_rag, mode}` → coached answer.
+| **GET** | `/health` | Returns service and active model status. |
+| **POST** | `/documents/upload` | Upload a PDF (multipart/form-data). |
+| **POST** | `/documents/ingest-text` | Ingest raw text into the vector database. |
+| **GET** | `/documents` | List all ingested documents from the catalogue. |
+| **POST** | `/coach/query` | Main endpoint — body `{query, use_rag, mode}` → structured coaching feedback. |
 
-OpenAI-compatible minimal endpoints:
+### 🔹 OpenAI-Compatible Endpoints
 
 | Method | Path | Notes |
 |--------|------|-------|
-| GET | `/v1/models` | Lists the backend model id. |
-| POST | `/v1/chat/completions` | Accepts standard messages array. Prefix `/norag` in user content to disable retrieval.
+| **GET** | `/v1/models` | Lists the current backend model identifier. |
+| **POST** | `/v1/chat/completions` | Accepts a standard `messages[]` array; prefix user message with `/norag` to disable retrieval. |
 
-Ollama-compatible minimal endpoints (for UI compatibility): `/api/version`, `/api/tags`, `/api/show`, `/api/pull`, `/api/ps`, `/api/delete`, `/api/generate`, `/api/chat`.
+### 🔹 Ollama-Compatible Endpoints
 
-`mode` (optional) supports hints like `critique`, `improve`, `structure`, `abstract`, `references`.
+Supported for UI and client interoperability:  
+`/api/version`, `/api/tags`, `/api/show`, `/api/pull`, `/api/ps`, `/api/delete`, `/api/generate`, `/api/chat`.
 
-## Quick Start
+---
 
-This compose file starts everything you need: Ollama (the model server), the CoachingWriter API, and OpenWebUI.
+### 🔸 Mode Parameter
+The optional `mode` field customizes the coaching tone and focus:
+- `critique` — detailed academic critique  
+- `improve` — constructive clarity and coherence suggestions  
+- `structure` — focus on argument and organization  
+- `abstract` — research-summary guidance  
+- `references` — citation and source-use advice  
 
-1) Start everything
+---
 
+## 🚀 Quick Start
+
+This repository ships with a ready-to-run **Docker Compose** environment.  
+It starts **Ollama** (model server), the **CoachingWriter API**, and **OpenWebUI** for interaction.
+
+### 1️⃣ Start Services
 ```bash
 docker compose up -d --build
 ```
@@ -110,12 +181,6 @@ curl -s -X POST http://localhost:8001/coach/query \
 
 Open http://localhost:8080 in your browser.
 
-Optional: start the small “pipelines” helper (not required for normal use):
-
-```bash
-docker compose --profile pipelines up -d --build pipelines
-```
-
 ### Simple API examples
 
 - OpenAI-style chat (works with many clients):
@@ -124,7 +189,7 @@ docker compose --profile pipelines up -d --build pipelines
 curl -s http://localhost:8001/v1/models | jq
 curl -s -X POST http://localhost:8001/v1/chat/completions \
 	-H 'Content-Type: application/json' \
-	-d '{"model":"gemma2:2b","messages":[{"role":"user","content":"Give two suggestions to improve this abstract."}]}' | jq
+	-d '{"model":"qwen3:4b","messages":[{"role":"user","content":"Give two suggestions to improve this abstract."}]}' | jq
 ```
 
 Tip: to turn off retrieval for a single prompt, start your message with “/norag”:
@@ -132,7 +197,7 @@ Tip: to turn off retrieval for a single prompt, start your message with “/nora
 ```bash
 curl -s -X POST http://localhost:8001/v1/chat/completions \
 	-H 'Content-Type: application/json' \
-	-d '{"model":"gemma2:2b","messages":[{"role":"user","content":"/norag Summarize best practices for literature review clarity."}]}' | jq
+	-d '{"model":"qwen3:4b","messages":[{"role":"user","content":"/norag Summarize best practices for literature review clarity."}]}' | jq
 ```
 
 - Coach endpoint (simple JSON body):

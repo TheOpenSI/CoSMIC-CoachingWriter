@@ -2,17 +2,25 @@
 vector_database.py
 ------------------
 
-This module defines the **VectorDatabase** service for the CoSMIC Coaching Writer.
-It manages storage, retrieval, and updates of embeddings for documents and ad-hoc
-text snippets using a FAISS index.
+Implements the **VectorDatabase** service for the CoSMIC Coaching Writer.
 
-Key responsibilities:
-- Initialize and persist a FAISS vector store on disk.
-- Add PDFs, directories of PDFs, and raw text snippets to the database.
-- Prevent duplicate/near-duplicate additions by similarity checking.
-- Provide similarity search with relevance scoring.
-- Maintain a CSV catalogue of ingested sources.
+This module provides a persistent FAISS-based vector store used for
+retrieval-augmented generation (RAG). It indexes and retrieves textual
+information from academic PDFs and user-submitted text.
+
+Responsibilities:
+  - Initialize and persist FAISS vector index.
+  - Add and deduplicate PDF and text data.
+  - Store a CSV catalogue of ingested sources.
+  - Provide similarity search interface for retrieval components.
+
+Database layout:
+  /database/vector_db/
+    ├── index.faiss
+    ├── index.pkl
+    └── file_list.csv  → (metadata catalogue)
 """
+
 
 import os, glob, pytz, sys, csv
 

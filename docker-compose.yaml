@@ -1,7 +1,18 @@
-# docker-compose.yaml
-# --------------------
-# Orchestrates multi-container setup for CoSMIC Coaching Writer.
-# Provides API service plus optional supporting services.
+# -----------------------------------------------------------------------------
+# docker-compose.yaml — CoSMIC Coaching Writer Deployment Stack
+# -----------------------------------------------------------------------------
+# Purpose:
+#   Defines a full multi-container stack for the CoSMIC Coaching Writer system.
+#   Components:
+#     1. ollama          → local LLM backend for model inference
+#     2. coaching-writer → FastAPI service providing RAG + coaching
+#     3. open-webui      → web front-end with chat interface and pipelines
+#     4. pipelines       → OpenWebUI pipeline runner, integrates custom logic
+#
+# Notes:
+#   - The setup automatically pulls the required model (qwen3:4b).
+#   - GPU acceleration can be enabled via Docker’s `--gpus all` flag.
+# -----------------------------------------------------------------------------
 
 services:
   ollama:
@@ -10,19 +21,16 @@ services:
     entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 5s
+      interval: 20s
+      retries: 40
     volumes:
       - ollama:/root/.ollama
       - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
-    restart: unless-stopped
     environment:
-    - OLLAMA_USE_GPU=true
+      - OLLAMA_USE_GPU=true  # enable GPU if available
+    restart: unless-stopped
     networks:
       - cosmic_net
-    
 
   coaching-writer:
     build:
@@ -30,35 +38,25 @@ services:
       dockerfile: Dockerfile
     image: cosmic-coaching-writer:latest
     container_name: coaching-writer
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - LLM_NAME=ollama:gemma2:2b
-      - VECTOR_DB_PATH=database/vector_db
-      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-      - RETRIEVE_TOPK=5
-      - RETRIEVE_SCORE_THRESHOLD=0.7
-      - VECTOR_DB_UPDATE_THRESHOLD=0.98
-      - MAX_NEW_TOKENS=512
-      - COACH_STYLE=supportive, concise, academically rigorous
-      - DEVICE=cpu
     depends_on:
       ollama:
         condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - LLM_NAME=qwen3:4b
+      - VECTOR_DB_PATH=database/vector_db
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - RETRIEVE_TOPK=5
+      - TEMPERATURE=0.2
+    volumes:
+      - ./vector_db:/app/database/vector_db
+      - ./academic-texts:/app/academic-texts
+      - open-webui:/app/backend/data
     ports:
       - "8001:8001"
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./vector_db:/app/database/vector_db
-      - open-webui:/app/backend/data
-      - ./academic-texts:/app/academic-texts
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/docs"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
     networks:
       - cosmic_net
+    restart: unless-stopped
 
   open-webui:
     build:
@@ -102,28 +100,13 @@ services:
     networks:
       - cosmic_net
 
-  # nginx:
-  #   image: nginx:latest
-  #   container_name: nginx
-  #   ports:
-  #     - "3000:80"    # user connects on localhost:3000
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-  #   depends_on:
-  #     coaching-writer:
-  #       condition: service_healthy
-  #     open-webui:
-  #       condition: service_healthy
-  #   networks:
-  #     - cosmic_net
-
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
     container_name: cw_pipelines
     environment:
       - OPENSI_COSMIC_API_BASE_URL=http://coaching-writer:8001
       # - MAX_QUERIES_PER_USER=10
-      - PIPELINES_URLS=file:///ext_pipelines/coaching_writer_pipeline.py
+      - PIPELINES_URLS=https://github.com/TheOpenSI/CoSMIC-CoachingWriter/blob/main/pipelines/coaching_writer_pipeline.py
     volumes:
       - ./pipelines:/ext_pipelines:ro
     depends_on:
