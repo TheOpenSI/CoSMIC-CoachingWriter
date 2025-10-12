@@ -130,7 +130,7 @@ class Pipeline:
         }
 
         try:
-            r = requests.post(f"{self.base}/coach/query", json=payload, timeout=120)
+            r = requests.post(f"{self.base}/coach/query", json=payload, timeout=1000)
             if r.status_code != 200:
                 return f"[Error {r.status_code}] {r.text}"
             data = r.json()
