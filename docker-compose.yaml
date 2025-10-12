@@ -11,7 +11,6 @@
 #
 # Notes:
 #   - The setup automatically pulls the required model (qwen3:4b).
-#   - GPU acceleration can be enabled via Docker’s `--gpus all` flag.
 # -----------------------------------------------------------------------------
 
 services:
@@ -26,8 +25,6 @@ services:
     volumes:
       - ollama:/root/.ollama
       - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
-    environment:
-      - OLLAMA_USE_GPU=true  # enable GPU if available
     restart: unless-stopped
     networks:
       - cosmic_net

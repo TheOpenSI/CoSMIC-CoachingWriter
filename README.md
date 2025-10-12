@@ -158,6 +158,8 @@ The optional `mode` field customizes the coaching tone and focus:
 This repository ships with a ready-to-run **Docker Compose** environment.  
 It starts **Ollama** (model server), the **CoachingWriter API**, and **OpenWebUI** for interaction.
 
+Detailed User Guide: https://docs.google.com/document/d/18pTrj2nETLMtE_Cn_deRucjL-H7XnJWmdP5Onv97Et0/edit?usp=sharing 
+
 ### 1️⃣ Start Services
 ```bash
 docker compose up -d --build
