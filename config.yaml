@@ -8,7 +8,7 @@
 #   - Coaching tone and constraints
 # -----------------------------------------------------------------------------
 
-llm_name: "ollama:qwen3:4b"
+llm_name: "ollama:gemma2:2b"
 
 rag:
   topk: 5                    # Number of top retrieved documents to use

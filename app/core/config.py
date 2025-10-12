@@ -43,7 +43,7 @@ class Settings:
         load_dotenv()
 
         # defaults
-        self.llm_name = "ollama:qwen3:4b"
+        self.llm_name = "ollama:gemma2:2b"
         self.ollama_host = "http://ollama:11434"
         self.vector_db_path = "database/vector_db"
         self.embedding_model = "sentence-transformers/all-MiniLM-L6-v2"

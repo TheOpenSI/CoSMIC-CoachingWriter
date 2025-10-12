@@ -9,12 +9,12 @@ set -e
 # Responsibilities:
 #   1. Start Ollama server in the background.
 #   2. Wait until API becomes responsive.
-#   3. Ensure required model (qwen3:4b) is downloaded.
+#   3. Ensure required model (gemma2:2b) is downloaded.
 #   4. Wait up to 10 minutes for completion, then attach.
 # -----------------------------------------------------------------------------
 
 
-MODEL_NAME="qwen3:4b"
+MODEL_NAME="gemma2:2b"
 
 echo "[ollama-entrypoint] Starting Ollama server..."
 ollama serve &
