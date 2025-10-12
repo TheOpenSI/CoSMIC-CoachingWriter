@@ -165,57 +165,11 @@ Detailed User Guide: https://docs.google.com/document/d/18pTrj2nETLMtE_Cn_deRucj
 docker compose up -d --build
 ```
 
-2) Check it’s running
+2) Check all containers have completed startup and are running on Docker Desktop
 
-```bash
-curl -s http://localhost:8001/health | jq
-```
-
-3) Ask the coach a question
-
-```bash
-curl -s -X POST http://localhost:8001/coach/query \
-	-H 'Content-Type: application/json' \
-	-d '{"query":"Give two suggestions to improve this abstract.", "use_rag": true}' | jq
-```
-
-4) Open the website
+3) Open the website
 
 Open http://localhost:8080 in your browser.
-
-### Simple API examples
-
-- OpenAI-style chat (works with many clients):
-
-```bash
-curl -s http://localhost:8001/v1/models | jq
-curl -s -X POST http://localhost:8001/v1/chat/completions \
-	-H 'Content-Type: application/json' \
-	-d '{"model":"qwen3:4b","messages":[{"role":"user","content":"Give two suggestions to improve this abstract."}]}' | jq
-```
-
-Tip: to turn off retrieval for a single prompt, start your message with “/norag”:
-
-```bash
-curl -s -X POST http://localhost:8001/v1/chat/completions \
-	-H 'Content-Type: application/json' \
-	-d '{"model":"qwen3:4b","messages":[{"role":"user","content":"/norag Summarize best practices for literature review clarity."}]}' | jq
-```
-
-- Coach endpoint (simple JSON body):
-
-```bash
-curl -s -X POST http://localhost:8001/coach/query \
-	-H 'Content-Type: application/json' \
-	-d '{"query": "Improve coherence of this paragraph about method validity:", "use_rag": true}' | jq
-```
-
-- Upload a PDF to use as context:
-
-```bash
-curl -s -X POST http://localhost:8001/documents/upload \
-	-F 'file=@/path/to/paper.pdf' | jq
-```
 
 ## Configuration
 

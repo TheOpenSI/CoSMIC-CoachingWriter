@@ -10,7 +10,7 @@
 #     4. pipelines       → OpenWebUI pipeline runner, integrates custom logic
 #
 # Notes:
-#   - The setup automatically pulls the required model (qwen3:4b).
+#   - The setup automatically pulls the required model (gemma2:2b).
 # -----------------------------------------------------------------------------
 
 services:
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      - LLM_NAME=qwen3:4b
+      - LLM_NAME=gemma2:2b
       - VECTOR_DB_PATH=database/vector_db
       - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
       - RETRIEVE_TOPK=5
