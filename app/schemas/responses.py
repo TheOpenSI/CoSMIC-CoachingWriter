@@ -1,7 +1,10 @@
 """
-Pydantic Response Schemas
+responses.py
+-------------
 
-Defines structured response models used in API responses.
+Defines the **Pydantic response models** used across API endpoints in
+the CoSMIC Coaching Writer service. These ensure standardized and
+machine-readable responses for health checks and query results.
 """
 
 from pydantic import BaseModel
@@ -10,11 +13,11 @@ from typing import List, Optional
 
 class HealthResponse(BaseModel):
     """
-    Response body for /health endpoint.
+    Response for `/health`.
 
     Attributes:
-        status (str): Health status ("ok" if healthy).
-        llm (str): Name of configured LLM.
+        status (str): Service status ("ok" when healthy).
+        llm (str): Active LLM identifier configured in settings.
     """
     status: str
     llm: str
@@ -22,13 +25,13 @@ class HealthResponse(BaseModel):
 
 class QueryResponse(BaseModel):
     """
-    Response body for /coach/query endpoint.
+    Response for `/coach/query`.
 
     Attributes:
-        response (str): Final processed coaching response.
-        raw_response (Optional[str]): Raw unprocessed LLM response.
-        retrieve_scores (List[float]): Similarity scores of retrieved docs.
-        used_context (str): Concatenated context snippets fed into LLM.
+        response (str): Final formatted coaching feedback.
+        raw_response (Optional[str]): Raw LLM output prior to filtering.
+        retrieve_scores (List[float]): Vector similarity scores for retrieved documents.
+        used_context (str): Text context provided to the LLM during inference.
     """
     response: str
     raw_response: Optional[str] = None

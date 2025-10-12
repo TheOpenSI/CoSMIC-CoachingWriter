@@ -2,14 +2,28 @@
 rag.py
 ------
 
-This module defines the **RAG (Retrieval-Augmented Generation)** service
-for the CoSMIC Coaching Writer. It retrieves relevant context from the
-vector database to augment user queries before they are sent to the LLM.
+Defines the **Retrieval-Augmented Generation (RAG)** subsystem for the
+CoSMIC Coaching Writer.
 
-Key responsibilities:
-- Perform similarity search against the vector database.
-- Filter documents by a relevance score threshold.
-- Provide a structured context string, relevance scores, and source metadata.
+This service retrieves semantically relevant content from the vector database
+to provide factual or conceptual grounding for the LLM before inference.
+
+### Responsibilities
+- Query the FAISS vector store for semantically similar documents.
+- Filter out low-relevance results below a configurable threshold.
+- Format retrieved passages into a structured “context” string
+  that the LLM can interpret effectively.
+
+### Environment integration
+Uses retrieval parameters defined in the global `settings` object:
+- `retrieve_topk`: Number of candidates to consider.
+- `retrieve_score_threshold`: Minimum cosine similarity to retain a document.
+
+### Returns
+A triple of `(context, scores, kept)` where:
+- `context` is a newline-joined text corpus (with doc IDs)
+- `scores` is a list of numeric relevance values
+- `kept` is structured metadata for each selected document
 """
 
 from .base import ServiceBase
@@ -18,14 +32,7 @@ from ..core.config import settings
 
 
 class RAG(ServiceBase):
-    """
-    Retrieval-augmented generation service.
-
-    Attributes:
-        topk (int): Maximum number of documents to retrieve.
-        threshold (float): Minimum relevance score to include a document.
-        vector_db (VectorDatabase): Singleton vector database instance.
-    """
+    """Retrieval-augmented generation helper for context fetching."""
 
     def __init__(self):
         super().__init__()
@@ -35,33 +42,35 @@ class RAG(ServiceBase):
 
     def __call__(self, query: str):
         """
-        Perform a retrieval query.
+        Retrieve context snippets for a given query.
 
         Args:
-            query (str): User query string.
+            query (str): User’s message or draft text.
 
         Returns:
-            Tuple[str, List[float], List[dict]]:
-                - context (str): Concatenated snippets with IDs.
-                - scores (List[float]): Relevance scores for each candidate.
-                - kept (List[dict]): Structured source metadata with id, score, text, threshold flag.
+            tuple[str, list[float], list[dict]]: 
+              (context, scores, kept) — where `kept` contains:
+                {
+                    "id": int,
+                    "score": float,
+                    "text": str,
+                    "passed_threshold": bool
+                }
         """
         docs = self.vector_db.similarity_search_with_relevance_scores(query, k=self.topk)
-        kept = []
-        scores = []
+        kept, scores = [], []
 
         for idx, (doc, score) in enumerate(docs):
             scores.append(score)
             if score >= self.threshold:
-                snippet = doc.page_content.replace('\n', ' ')
                 kept.append({
                     "id": idx,
                     "score": score,
-                    "text": snippet[:600],
+                    "text": doc.page_content.replace('\n', ' ')[:600],
                     "passed_threshold": True,
                 })
 
-        # Fallback: always return the top document if nothing passed threshold
+        # Fallback to top document if no match meets threshold
         if not kept and docs:
             top_doc, top_score = docs[0]
             kept.append({
@@ -71,9 +80,9 @@ class RAG(ServiceBase):
                 "passed_threshold": False,
             })
 
-        context = "\n".join([f"[{k['id']}] {k['text']}" for k in kept])
+        context = "\n".join(f"[{k['id']}] {k['text']}" for k in kept)
         return context, scores, kept
 
 
-# Singleton instance
+# Singleton instance for reuse across app
 rag_singleton = RAG()

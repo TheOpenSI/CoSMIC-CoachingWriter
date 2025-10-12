@@ -2,15 +2,21 @@
 coach.py
 --------
 
-This module defines the **CoachingService**, the core orchestration service
-for the CoSMIC Coaching Writer. It combines retrieval (RAG) with the LLM
-to generate context-aware coaching feedback.
+Implements the **CoachingService**, the orchestration layer that connects
+retrieval and generation for the CoSMIC Coaching Writer.
 
-Key responsibilities:
-- Build prompts with mode-specific instructions (chat vs. task).
-- Perform retrieval via vector database if RAG is enabled.
-- Invoke the LLM with context to generate coaching responses.
-- Attach source markers to responses when retrieved documents are used.
+### Overview
+The CoachingService serves as the brain of the system:
+  1. Receives a user’s query (draft or question)
+  2. Optionally retrieves relevant supporting text using the RAG subsystem
+  3. Builds a mode-specific prompt (chat or task)
+  4. Calls the LLM to generate structured, rule-compliant feedback
+  5. Returns the feedback with retrieval metadata
+
+### Responsibilities
+- Route and merge RAG context with user queries.
+- Adjust tone and analytical style depending on `mode` ("chat" vs "task").
+- Post-process model output to include source markers if context was used.
 """
 
 from .base import ServiceBase
@@ -51,7 +57,7 @@ class CoachingService(ServiceBase):
             prefix = ""
         return prefix + query
 
-    def __call__(self, query: str, use_rag: bool = True, mode: str | None = None):
+    def __call__(self, query: str, use_rag: bool = True, mode: str | None = None, injected_context: str | None = None):
         """
         Generate a coaching response.
 
@@ -72,7 +78,12 @@ class CoachingService(ServiceBase):
         retrieve_scores = []
         sources = []
 
-        if use_rag:
+        if injected_context:
+            # Use provided context directly (e.g., from attached PDFs)
+            context = injected_context
+            retrieve_scores = []
+            sources = [{"id": 0, "score": 1.0, "text": injected_context[:200], "passed_threshold": True}]
+        elif use_rag:
             context, retrieve_scores, sources = self.rag(query)
 
         prompt = self.build_prompt(query, mode=mode)

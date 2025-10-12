@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# entrypoint.sh
-# -------------
-# Entrypoint for the Coaching Writer FastAPI service.
+# -----------------------------------------------------------------------------
+# entrypoint.sh — Coaching Writer FastAPI Entrypoint
+# -----------------------------------------------------------------------------
 # Responsibilities:
-# - Load environment variables from `.env` if present.
-# - Start Uvicorn server serving the `app.main:app` application.
-# - Support live-reload in development mode (via RELOAD=true).
+#   - Load environment variables (if `.env` exists).
+#   - Reset file_list.csv to keep vector DB fresh.
+#   - Start Uvicorn server on port 8001.
+#   - Optional live reload in dev mode.
+# -----------------------------------------------------------------------------
+
 
 if [ -f /app/.env ]; then
   echo "[entrypoint] Loading .env"
   set -a; source /app/.env; set +a
 fi
 
-# Reset file_list.csv each time the container starts
 mkdir -p /app/database/vector_db
 echo "Source,Time,Comment" > /app/database/vector_db/file_list.csv
 echo "[entrypoint] Reset file_list.csv"
