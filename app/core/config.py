@@ -12,7 +12,7 @@ that can be imported anywhere in the codebase.
 """
 
 import os
-import yaml
+import torch
 from dotenv import load_dotenv
 
 
@@ -39,10 +39,10 @@ class Settings:
     """
 
     def __init__(self):
-        """Initialize settings by loading from environment and config file."""
+        """Initialize settings (environment + GPU auto-detect)."""
         load_dotenv()
 
-        # defaults
+        # --- Default values ---
         self.llm_name = "ollama:gemma2:2b"
         self.ollama_host = "http://ollama:11434"
         self.vector_db_path = "database/vector_db"
@@ -53,36 +53,48 @@ class Settings:
         self.device = "cpu"
         self.max_new_tokens = 512
         self.coach_style = "academic"
-        self.academic_texts_dir: str = os.path.join(os.getcwd(), "academic-texts")
+        self.academic_texts_dir = os.path.join(os.getcwd(), "academic-texts")
 
-        # environment variable overrides
-        self._load_env()
+        # --- Override with environment variables ---
+        self._load_env_overrides()
 
-        # optional YAML overrides
-        self._load_yaml("config.yaml")
+        # --- CoSMIC-style GPU auto-detection ---
+        self.device = self._detect_device()
+        print(f"[config] Using device: {self.device}")
 
-    def _load_env(self):
-        """Override defaults with environment variables if present."""
+    # ----------------------------------------------------------------------
+    def _load_env_overrides(self):
+        """Load environment variable overrides."""
         self.llm_name = os.getenv("LLM_NAME", self.llm_name)
         self.ollama_host = os.getenv("OLLAMA_HOST", self.ollama_host)
         self.vector_db_path = os.getenv("VECTOR_DB_PATH", self.vector_db_path)
         self.embedding_model = os.getenv("EMBEDDING_MODEL", self.embedding_model)
-        self.device = os.getenv("DEVICE", self.device)
+        self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", self.retrieve_topk))
+        self.retrieve_score_threshold = float(
+            os.getenv("RETRIEVE_SCORE_THRESHOLD", self.retrieve_score_threshold)
+        )
+        self.vector_db_update_threshold = float(
+            os.getenv("VECTOR_DB_UPDATE_THRESHOLD", self.vector_db_update_threshold)
+        )
+        self.max_new_tokens = int(os.getenv("MAX_NEW_TOKENS", self.max_new_tokens))
+        self.coach_style = os.getenv("COACH_STYLE", self.coach_style)
 
-    def _load_yaml(self, path: str):
-        """
-        Override defaults with values from a YAML file, if present.
+        # Manual override for device (takes precedence)
+        manual_device = os.getenv("DEVICE")
+        if manual_device:
+            self.device = manual_device.lower()
 
-        Args:
-            path (str): Path to the YAML file.
-        """
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                config = yaml.safe_load(f) or {}
-            for key, value in config.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
+    def _detect_device(self) -> str:
+        """Detect best available compute device (CoSMIC pattern)."""
+        # If user explicitly set DEVICE, respect it
+        if os.getenv("DEVICE"):
+            return os.getenv("DEVICE").lower()
 
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
 
 # Singleton settings object
 settings = Settings()

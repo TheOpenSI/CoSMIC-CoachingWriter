@@ -32,6 +32,10 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_community.document_loaders import PyPDFLoader
+from ..core.config import settings
+
+resolved_device = settings.device
+
 
 # =============================================================================================================
 class BCOLORS:
@@ -110,7 +114,7 @@ class VectorDatabase(ServiceBase):
         document_analyser_model: str="gte-small",
         local_database_path: str="database/vector_db",
         vector_database_update_threshold: float=0.98,
-        device: str="cpu",
+        device: str | None = None,
         **kwargs
     ):
         """Vector database service.
@@ -121,7 +125,7 @@ class VectorDatabase(ServiceBase):
                 Default to "database/vector_database".
             vector_database_update_threshold (float, optional): contents with similarity >= this threshold
                 will be skipped. Default to 0.98.
-            device (str, optional): use cuda or cpu for LLM. Defaults to "cuda".
+            device (str): Compute device ("cpu", "cuda", or "mps").
             Defaults to "gte-small".
         """
         super().__init__(**kwargs)
@@ -186,7 +190,7 @@ class VectorDatabase(ServiceBase):
         self.database_update_embedding = HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL_NAME,
             multi_process=False,  # TODO
-            model_kwargs={"device": device},
+            model_kwargs={"device": resolved_device},
             encode_kwargs={"normalize_embeddings": True},
         )
 

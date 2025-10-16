@@ -17,6 +17,13 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
@@ -40,7 +47,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      - LLM_NAME=gemma2:2b
+      - LLM_NAME=qwen3:4b
       - VECTOR_DB_PATH=database/vector_db
       - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
       - RETRIEVE_TOPK=5
@@ -80,7 +87,6 @@ services:
       - PIPELINES_URL=http://pipelines:9099
     volumes:
       # - ../OpenWebUI-CoSMIC:/app/src:ro
-      - ./config.yaml:/app/src/shared/config.yaml:ro
       - ./vector_db:/app/database/vector_db
       - open-webui:/app/backend/data
     depends_on:
