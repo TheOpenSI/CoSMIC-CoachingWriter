@@ -19,6 +19,7 @@ The CoachingService serves as the brain of the system:
 - Post-process model output to include source markers if context was used.
 """
 
+import os
 from .base import ServiceBase
 from .llm import llm_singleton
 from .rag import rag_singleton
@@ -57,7 +58,15 @@ class CoachingService(ServiceBase):
             prefix = ""
         return prefix + query
 
-    def __call__(self, query: str, use_rag: bool = True, mode: str | None = None, injected_context: str | None = None):
+    def __call__(
+        self,
+        query: str,
+        use_rag: bool = True,
+        mode: str | None = None,
+        injected_context: str | None = None,
+        injected_filename: str | None = None,   # 👈 NEW
+        user_id: str | None = None
+    ):
         """
         Generate a coaching response.
 
@@ -78,21 +87,96 @@ class CoachingService(ServiceBase):
         retrieve_scores = []
         sources = []
 
-        if injected_context:
-            # Use provided context directly (e.g., from attached PDFs)
+        # --- Step 1: Retrieve context ---
+        if injected_context and use_rag:
+            # Retrieve relevant academic guide context
+            rag_context, retrieve_scores, rag_sources = self.rag(query)
+
+            # Add uploaded doc as a distinct source
+            context = (
+                f"Here is the user's uploaded text for analysis:\n"
+                f"{injected_context[:1000]}\n\n"
+                f"Use the following academic writing references to guide your feedback:\n"
+                f"{rag_context}"
+            )
+
+            # Only use academic guide sources (exclude upload)
+            sources = rag_sources
+
+
+        elif injected_context:
+            # Only uploaded doc (no RAG)
             context = injected_context
-            retrieve_scores = []
-            sources = [{"id": 0, "score": 1.0, "text": injected_context[:200], "passed_threshold": True}]
+            sources = []
+
         elif use_rag:
+            # Only RAG context (no upload)
             context, retrieve_scores, sources = self.rag(query)
 
+        # --- Step 2: Build prompt ---
         prompt = self.build_prompt(query, mode=mode)
+
+        # --- Step 3: Build numbered context block (group by file) ---
+        if sources:
+            unique_sources = []
+            numbered_context = "Context:\n"
+
+            # Collect one entry per unique filename
+            for s in sources:
+                name = s.get("source") or s.get("metadata", {}).get("source") or "context"
+                if name not in [u["source"] for u in unique_sources]:
+                    unique_sources.append({"source": name, "text": s.get("text", "")})
+
+            # Label each unique file as [1], [2], etc.
+            for i, src in enumerate(unique_sources, start=1):
+                preview = src["text"][:800].strip().replace("\n", " ")
+                numbered_context += f"[{i}] ({os.path.basename(src['source'])}) {preview}\n"
+
+            context = numbered_context.strip()
+
+        # --- Step 4: Generate response from LLM ---
         response, raw = self.llm(prompt, context=context)
 
+        heading_patterns = [
+            r"(?im)^\s*Acknowledge\s*[:\-]?\s*",
+            r"(?im)^\s*Analyze\s*[:\-]?\s*",
+            r"(?im)^\s*Explain\s*[:\-]?\s*",
+            r"(?im)^\s*Illustrate\s*[:\-]?\s*",
+            r"(?im)^\s*Encourage\s*[:\-]?\s*",
+        ]
+
+        import re
+        for pattern in heading_patterns:
+            response = re.sub(pattern, "", response)
+
+        # --- Step 5: Append a full legend (deduplicated filenames) ---
         if sources and use_rag:
-            marker_list = ", ".join([f"[{s['id']}]" for s in sources])
-            if marker_list not in response:
-                response += f"\n\nSources: {marker_list}"
+            unique_names = []
+            for s in sources:
+                name = (
+                    s.get("source")
+                    or s.get("path")
+                    or s.get("metadata", {}).get("source")
+                    or s.get("name")
+                    or s.get("origin")
+                    or "context"
+                )
+                name = os.path.basename(name)
+                if name not in unique_names:
+                    unique_names.append(name)
+
+            legend_lines = [f"[{i}] {n}" for i, n in enumerate(unique_names, start=1)]
+            legend = "\n".join(legend_lines)
+            response += f"\n\nSources:\n{legend}"
+
+        # --- Step 6: Normalize in-text citations ---
+        if sources and use_rag:
+            # Replace any [number] greater than your total unique sources
+            max_id = len(unique_names)
+            import re
+            response = re.sub(r'\[(\d+)\]', 
+                            lambda m: f"[{min(int(m.group(1)), max_id)}]", 
+                            response)
 
         return {
             "response": response,

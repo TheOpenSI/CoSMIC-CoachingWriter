@@ -311,58 +311,61 @@ class VectorDatabase(ServiceBase):
         # Close the file.
         catalogue_pt.close()
 
-    def update_database_from_document(
-        self,
-        document_path: str
-    ):
-        """Add a document to the vector database.
+    def update_database_from_document(self, document_path: str):
+        """Add a document to the vector database with filename metadata.
 
         Args:
-            document_path (str): a document path.
+            document_path (str): path to a PDF document.
         """
-        # Check if the document exists.
-        if os.path.exists(document_path):
-            # Read pages of a document.
-            loader = PyPDFLoader(document_path)
-            pages = loader.load_and_split() # split by page number
+        if not os.path.exists(document_path):
+            print(set_color("warning", f"Document {document_path} not found."))
+            return
 
-            for i in range(len(pages)):
-                pages[i].page_content = pages[i].page_content.replace("\t", " ")
+        # Load and split PDF pages
+        loader = PyPDFLoader(document_path)
+        pages = loader.load_and_split()
 
-            # Split each page into tokens.
-            document_processed = []
+        # Normalize whitespace
+        for i in range(len(pages)):
+            pages[i].page_content = pages[i].page_content.replace("\t", " ")
 
-            for doc in pages:
-                # If not highly similar to existing contents, add the content.
+        # Prepare metadata-aware document chunks
+        filename = os.path.basename(document_path)
+        document_processed = []
+
+        for doc in pages:
+            # Prevent duplicates by similarity check
+            try:
                 content_retrieved, similarity_score = self.similarity_search_with_relevance_scores(
-                    doc.page_content,
-                    k=1
+                    doc.page_content, k=1
                 )[0]
+            except IndexError:
+                similarity_score = 0.0
+                content_retrieved = None
 
-                # Skip if already in the database or has a high similiarity.
-                if similarity_score >= self.vector_database_update_threshold \
-                    or content_retrieved.page_content.find(doc.page_content) > -1 \
-                    or doc.page_content.find(content_retrieved.page_content) > -1:
-                    continue
+            if (
+                similarity_score >= self.vector_database_update_threshold
+                or (content_retrieved and content_retrieved.page_content.find(doc.page_content) > -1)
+                or (content_retrieved and doc.page_content.find(content_retrieved.page_content) > -1)
+            ):
+                continue
 
-                # Ready to add to the vector database.
-                document_processed += self.document_splitter.split_documents([doc])
+            # Split long text into smaller chunks
+            sub_docs = self.document_splitter.split_documents([doc])
 
-            # Obtain new knowledge from the splitted tokens.
-            if len(document_processed) > 0:  # for invalid pdf such as a scanned .pdf
-                self.database.add_documents(document_processed)
+            # Attach filename metadata to each sub-doc
+            for sub_doc in sub_docs:
+                sub_doc.metadata["source"] = filename
+            document_processed.extend(sub_docs)
 
-                # Update database catalogue.
-                self.update_database_catalogue(document_path)
-
-                # Save to local database.
-                self.database.save_local(self.local_database_path)
-
-                print(set_color("info", f"Add '{document_path}'."))
-            else:
-                print(set_color("warning", f"Contents of '{document_path}' exist."))
+        # Store in FAISS if there’s new content
+        if document_processed:
+            self.database.add_documents(document_processed)
+            self.update_database_catalogue(filename)
+            self.database.save_local(self.local_database_path)
+            print(set_color("info", f"Added '{filename}' ({len(document_processed)} chunks)."))
         else:
-            print(set_color("warning", f"Document {document_path} not exists."))
+            print(set_color("warning", f"Contents of '{filename}' already exist."))
 
     def update_database_from_text(
         self,

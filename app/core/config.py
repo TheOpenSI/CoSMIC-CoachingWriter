@@ -48,7 +48,7 @@ class Settings:
         self.vector_db_path = "database/vector_db"
         self.embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
         self.retrieve_topk = 5
-        self.retrieve_score_threshold = 0.65
+        self.retrieve_score_threshold = 0.55
         self.vector_db_update_threshold = 0.85
         self.device = "cpu"
         self.max_new_tokens = 512

@@ -68,10 +68,14 @@ class OllamaChat(ServiceBase):
     )
 
     def build_messages(self, question: str, context: str = "") -> List[Dict[str, str]]:
-        """Build standard message list for chat-type models."""
+        """Build standard message list for chat-type models (CoSMIC-style)."""
         system_instruction = self.SYSTEM_PROMPT
         if context:
-            system_instruction += f"\n\nContext:\n{context[:3000]}"
+            system_instruction += (
+                "\n\nUse the following context when relevant. "
+                "Cite sources inline using [1], [2] where appropriate.\n\n"
+                f"{context[:3000]}"
+            )
         return [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": question},
@@ -117,7 +121,6 @@ class OllamaChat(ServiceBase):
                     data = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                # 🚫 Skip model reasoning
                 if "thinking" in data:
                     continue
                 if "response" in data and data["response"]:
@@ -144,26 +147,60 @@ class OllamaChat(ServiceBase):
         """
         Generate a feedback response from the LLM while enforcing no-rewrite rule.
         """
-        # Compose prompt
-        if context:
-            composed = f"{self.SYSTEM_PROMPT}\n\nContext:\n{context[:3000]}\n\nUser: {question}\nAssistant:"
+        prefers_chat = any(name in self.llm_name.lower()
+            for name in ["qwen", "gemma3", "mistral", "phi", "chat", "vicuna"]
+        )
+
+        if prefers_chat:
+            # Build messages for chat endpoint
+            messages = self.build_messages(question, context)
+            try:
+                r = requests.post(
+                    f"{self.host}/api/chat",
+                    json={"model": self.llm_name, "messages": messages, "stream": False},
+                    timeout=600,
+                )
+                r.raise_for_status()
+                data = r.json()
+                text = (
+                    data.get("message", {}).get("content")
+                    or data.get("response")
+                    or (data.get("choices", [{}])[0].get("message", {}).get("content", ""))
+                    or ""
+                )
+            except Exception:
+                # fallback if /api/chat fails
+                composed = f"{self.SYSTEM_PROMPT}\n\n{context}\n\nUser: {question}\nAssistant:"
+                text = self.run(composed)
         else:
-            composed = f"{self.SYSTEM_PROMPT}\n\nUser: {question}\nAssistant:"
+            # Non-chat models use /api/generate directly
+            if context:
+                composed = (
+                    f"{self.SYSTEM_PROMPT}\n\n"
+                    "Use the following context when relevant. "
+                    "Cite sources inline using [1], [2] where appropriate.\n\n"
+                    f"Context:\n{context[:3000]}\n\nUser: {question}\nAssistant:"
+                )
+            else:
+                composed = f"{self.SYSTEM_PROMPT}\n\nUser: {question}\nAssistant:"
+            text = self.run(composed)
 
-        text = self.run(composed)
-
-        # --- Anti-rewrite filter ---
+        # Anti-rewrite safety guard 
         forbidden = [
-            "you could rephrase", "rewrite this as", "consider writing",
-            "for example, you could write", "here’s how it could look", "one possible revision",
+            "you could rephrase",
+            "rewrite this as",
+            "consider writing",
+            "for example, you could write",
+            "here’s how it could look",
+            "one possible revision",
         ]
         if any(p in text.lower() for p in forbidden):
             text += (
                 "\n\n[Reminder: As your coach, I do not rewrite text. "
                 "Apply concepts to your own writing instead.]"
             )
-        return text, text
 
+        return text, text
 
 class ManagedOllamaChat(OllamaChat):
     """Adds automatic model pull/verification via OllamaPullManager."""
@@ -174,8 +211,9 @@ class ManagedOllamaChat(OllamaChat):
         self.pull_manager = OllamaPullManager(
             model_name=self.llm_name,
             mode="stochastic",
-            interventions=[85, 95],
-            max_retries=3,
+            interventions=[85, 90, 95],
+            min_speed_kbps = 500.0,
+            max_retries=10,
             fall_back_interval=60,
             ollama_client=self.ollama_client,
         )

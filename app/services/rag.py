@@ -48,13 +48,15 @@ class RAG(ServiceBase):
             query (str): User’s message or draft text.
 
         Returns:
-            tuple[str, list[float], list[dict]]: 
+            tuple[str, list[float], list[dict]]:
               (context, scores, kept) — where `kept` contains:
                 {
                     "id": int,
                     "score": float,
                     "text": str,
-                    "passed_threshold": bool
+                    "passed_threshold": bool,
+                    "source": str,   # filename
+                    "metadata": dict # all metadata
                 }
         """
         docs = self.vector_db.similarity_search_with_relevance_scores(query, k=self.topk)
@@ -62,24 +64,44 @@ class RAG(ServiceBase):
 
         for idx, (doc, score) in enumerate(docs):
             scores.append(score)
+
+            # Pull filename metadata if available
+            source_name = (
+                doc.metadata.get("source")
+                or doc.metadata.get("path")
+                or doc.metadata.get("file_name")
+                or "context"
+            )
+
             if score >= self.threshold:
                 kept.append({
                     "id": idx,
                     "score": score,
                     "text": doc.page_content.replace('\n', ' ')[:600],
                     "passed_threshold": True,
+                    "source": source_name,
+                    "metadata": doc.metadata
                 })
 
-        # Fallback to top document if no match meets threshold
+        # --- Fallback to top doc if nothing meets threshold ---
         if not kept and docs:
             top_doc, top_score = docs[0]
+            source_name = (
+                top_doc.metadata.get("source")
+                or top_doc.metadata.get("path")
+                or top_doc.metadata.get("file_name")
+                or "context"
+            )
             kept.append({
                 "id": 0,
                 "score": top_score,
                 "text": top_doc.page_content.replace('\n', ' ')[:600],
                 "passed_threshold": False,
+                "source": source_name,
+                "metadata": top_doc.metadata
             })
 
+        # --- Merge kept context ---
         context = "\n".join(f"[{k['id']}] {k['text']}" for k in kept)
         return context, scores, kept
 
