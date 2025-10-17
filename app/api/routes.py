@@ -28,7 +28,7 @@ This router provides three integration layers:
 
 from fastapi import APIRouter, UploadFile, Query, File, HTTPException
 from fastapi.responses import StreamingResponse
-import os, shutil, time, uuid, json, glob, csv
+import os, shutil, time, uuid, json, glob, csv, types
 from typing import List, Union, Optional
 from ..schemas.requests import QueryRequest, TextIngestRequest
 from ..schemas.responses import HealthResponse, QueryResponse
@@ -362,6 +362,9 @@ def ollama_ps():
 def ollama_delete(body: dict):
     return {"status": "success"}
 
+def _current_ts():
+    """Return the current UTC timestamp in Ollama-style format."""
+    return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
 
 @router.post("/api/generate")
 def ollama_generate(body: dict):
@@ -372,27 +375,51 @@ def ollama_generate(body: dict):
         raise HTTPException(status_code=400, detail="prompt required")
 
     result = coach_singleton(prompt, use_rag=True, mode=None)
-    answer = result.get("response", "")
+
+    # Normalize all possible return types to a plain text answer generator
+    def _normalize_result(res):
+        # case 1: direct dict
+        if isinstance(res, dict):
+            yield res.get("response", "")
+        # case 2: list of chunks
+        elif isinstance(res, list):
+            for chunk in res:
+                if isinstance(chunk, dict) and chunk.get("response"):
+                    yield chunk["response"]
+        # case 3: generator
+        elif isinstance(res, types.GeneratorType):
+            for chunk in res:
+                if isinstance(chunk, dict) and chunk.get("response"):
+                    yield chunk["response"]
+        # case 4: plain string
+        elif isinstance(res, str):
+            yield res
+        else:
+            yield str(res)
 
     if not stream:
+        full_text = "".join(_normalize_result(result))
         return {
             "model": model,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
-            "response": answer,
+            "created_at": _current_ts(),
+            "response": full_text,
             "done": True,
         }
 
     def _iter():
-        for word in answer.split():
+        for token in _normalize_result(result):
+            # Filter out any 'thinking' text if model emitted it
+            if "thinking" in token.lower():
+                continue
             yield json.dumps({
                 "model": model,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
-                "response": word + " ",
+                "created_at": _current_ts(),
+                "response": token,
                 "done": False
             }) + "\n"
         yield json.dumps({
             "model": model,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "created_at": _current_ts(),
             "response": "",
             "done": True
         }) + "\n"
@@ -414,27 +441,45 @@ def ollama_chat(body: dict):
 
     query = user_msgs[-1]
     result = coach_singleton(query, use_rag=True, mode=None)
-    answer = result.get("response", "")
+
+    def _normalize_result(res):
+        if isinstance(res, dict):
+            yield res.get("response", "")
+        elif isinstance(res, list):
+            for chunk in res:
+                if isinstance(chunk, dict) and chunk.get("response"):
+                    yield chunk["response"]
+        elif isinstance(res, types.GeneratorType):
+            for chunk in res:
+                if isinstance(chunk, dict) and chunk.get("response"):
+                    yield chunk["response"]
+        elif isinstance(res, str):
+            yield res
+        else:
+            yield str(res)
 
     if not stream:
+        full_text = "".join(_normalize_result(result))
         return {
             "model": model,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
-            "message": {"role": "assistant", "content": answer},
+            "created_at": _current_ts(),
+            "message": {"role": "assistant", "content": full_text},
             "done": True,
         }
 
     def _iter():
-        for word in answer.split():
+        for token in _normalize_result(result):
+            if "thinking" in token.lower():
+                continue
             yield json.dumps({
                 "model": model,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
-                "message": {"role": "assistant", "content": word + " "},
+                "created_at": _current_ts(),
+                "message": {"role": "assistant", "content": token},
                 "done": False
             }) + "\n"
         yield json.dumps({
             "model": model,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "created_at": _current_ts(),
             "message": {"role": "assistant", "content": ""},
             "done_reason": "stop",
             "done": True

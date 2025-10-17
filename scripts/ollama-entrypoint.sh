@@ -14,7 +14,7 @@ set -e
 # -----------------------------------------------------------------------------
 
 
-MODEL_NAME="gemma2:2b"
+MODEL_NAME="${OLLAMA_MODEL:-qwen3:4b}"
 
 echo "[ollama-entrypoint] Starting Ollama server..."
 ollama serve &
