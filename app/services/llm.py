@@ -222,7 +222,3 @@ class ManagedOllamaChat(OllamaChat):
     def __call__(self, question: str, context: str = ""):
         self.pull_manager.pull_model()
         return super().__call__(question, context)
-
-
-# Singleton instance
-llm_singleton = ManagedOllamaChat()

@@ -32,8 +32,8 @@ import os, shutil, time, uuid, json, glob, csv, types
 from typing import List, Union, Optional
 from ..schemas.requests import QueryRequest, TextIngestRequest
 from ..schemas.responses import HealthResponse, QueryResponse
-from ..services.coach import coach_singleton
-from ..services.vector_database import vector_db_singleton
+from ..services.coach import CoachingService
+from ..services.vector_database import get_vector_db
 from ..core.config import settings
 import warnings
 warnings.filterwarnings("ignore", message="Ignoring wrong pointing object")
@@ -93,9 +93,10 @@ def _resolve_attachment_path(item: Union[str, dict]) -> Optional[str]:
 def _catalogue_sources_set() -> set:
     """Return set of recorded document sources from catalogue CSV."""
     recorded = set()
-    if os.path.exists(vector_db_singleton.catalogue_path):
+    system_db = get_vector_db("system")
+    if os.path.exists(system_db.catalogue_path):
         try:
-            with open(vector_db_singleton.catalogue_path, newline="") as f:
+            with open(system_db.catalogue_path, newline="") as f:
                 reader = csv.reader(f)
                 next(reader, None)  # skip header
                 for row in reader:
@@ -108,9 +109,14 @@ def _catalogue_sources_set() -> set:
 
 def _sync_new_pdfs_from_uploads(limit: int = 20) -> int:
     """Ingest new PDFs from OpenWebUI uploads directory not in the catalogue."""
+    
+    print(f"[DEBUG] Checking {len(pdfs)} PDFs in uploads folder, recorded={len(recorded)}")
+
+    
     if not os.path.isdir(DEFAULT_UPLOADS_DIR):
         return 0
 
+    system_db = get_vector_db("system")
     recorded = _catalogue_sources_set()
     pdfs = glob.glob(os.path.join(DEFAULT_UPLOADS_DIR, "**", "*.pdf"), recursive=True)
     pdfs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
@@ -119,10 +125,10 @@ def _sync_new_pdfs_from_uploads(limit: int = 20) -> int:
     for p in pdfs[:limit]:
         if p not in recorded and os.path.exists(p):
             try:
-                vector_db_singleton.add_pdf(p)
+                system_db.add_pdf(p)
                 count += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[sync_new_pdfs] Error adding {p}: {e}")
     return count
 
 
@@ -143,6 +149,36 @@ def _normalize_incoming_model(model: Optional[str]) -> str:
 @router.post("/coach/query", response_model=QueryResponse)
 def coach_query(payload: QueryRequest):
     """Handle incoming coaching requests and optional document attachments."""
+    from app.services.chat_history import (
+        set_chat_context,
+        get_chat_context,
+        clear_chat_context,
+    )
+
+    # ----------------------------------------------------------------------
+    # 1. Determine chat context identity
+    # ----------------------------------------------------------------------
+    chat_id = getattr(payload, "chat_id", None) or "default"
+    user_id = getattr(payload, "user_id", "anonymous")
+
+    print(f"[DEBUG] Payload keys: {list(payload.dict().keys())}")
+
+
+    # Detect new chat (heuristic: either marked or first message)
+    is_new_chat = getattr(payload, "is_new_chat", False)
+    if not is_new_chat:
+        # Optional auto-detect: if only one message, assume new chat
+        if hasattr(payload, "messages") and len(payload.messages or []) <= 1:
+            is_new_chat = True
+
+    print(f"[DEBUG] coach_query called for user_id={user_id}, chat_id={chat_id}, is_new_chat={is_new_chat}")
+
+    if is_new_chat:
+        clear_chat_context(user_id, chat_id)
+
+    # ----------------------------------------------------------------------
+    # 2. Process attached PDFs as before
+    # ----------------------------------------------------------------------
     docs = payload.documents or []
     resolved_count = 0
     attached_context_parts: list[str] = []
@@ -152,12 +188,13 @@ def coach_query(payload: QueryRequest):
             path = _resolve_attachment_path(d)
             if path and path.lower().endswith(".pdf") and os.path.exists(path):
                 from langchain_community.document_loaders import PyPDFLoader
+
                 loader = PyPDFLoader(path)
                 pages = loader.load()[:2]
                 snippet = "\n".join([p.page_content for p in pages])
                 if snippet:
                     attached_context_parts.append(snippet[:3000])
-                vector_db_singleton.add_pdf(path)
+                get_vector_db("system").update_database_from_document(path)
                 resolved_count += 1
         except Exception:
             pass
@@ -171,11 +208,14 @@ def coach_query(payload: QueryRequest):
             print(f"[coach_query] Auto-sync error: {e}")
 
         try:
+            import glob
+
             pdfs = glob.glob(os.path.join(DEFAULT_UPLOADS_DIR, "**", "*.pdf"), recursive=True)
             if pdfs:
                 pdfs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
                 latest = pdfs[0]
                 from langchain_community.document_loaders import PyPDFLoader
+
                 loader = PyPDFLoader(latest)
                 pages = loader.load()[:2]
                 snippet = "\n".join([p.page_content for p in pages])
@@ -185,12 +225,30 @@ def coach_query(payload: QueryRequest):
             pass
 
     injected_context = "\n---\n".join(attached_context_parts) if attached_context_parts else None
-    result = coach_singleton(
+
+    # ----------------------------------------------------------------------
+    # 3. Merge with previously stored chat context
+    # ----------------------------------------------------------------------
+    previous_context = get_chat_context(user_id, chat_id)
+    full_context = "\n\n".join([c for c in [previous_context, injected_context] if c])
+
+    # ----------------------------------------------------------------------
+    # 4. Run CoachingService
+    # ----------------------------------------------------------------------
+    coach = CoachingService(user_id=user_id)
+    result = coach(
         payload.query,
         use_rag=payload.use_rag,
         mode=payload.mode,
-        injected_context=injected_context,
+        injected_context=full_context,
     )
+
+    # ----------------------------------------------------------------------
+    # 5. Save context for future turns in this chat
+    # ----------------------------------------------------------------------
+    if injected_context:
+        set_chat_context(user_id, chat_id, full_context)
+
     return QueryResponse(**result)
 
 
@@ -201,27 +259,28 @@ def upload_document(file: UploadFile = File(...)):
     with open(temp_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
     if file.filename.lower().endswith(".pdf"):
-        vector_db_singleton.add_pdf(temp_path)
+        get_vector_db("system").update_database_from_document(path)
     return {"status": "uploaded", "filename": file.filename}
 
 
 @router.post("/documents/ingest-text")
 def ingest_text(payload: TextIngestRequest):
-    status = vector_db_singleton.add_text(payload.text)
+    status = get_vector_db("system").update_database_from_text(payload.text)
     return {"status": "added" if status == 0 else "skipped"}
 
 
 @router.post("/documents/ingest-folder")
 def ingest_folder(path: str = Query(..., description="Path to folder containing PDFs")):
-    count = vector_db_singleton.add_pdf_folder(path)
+    count = get_vector_db("system").add_document_directory(path)
     return {"status": "completed", "pdfs_added": count}
 
 
 @router.get("/documents")
 def list_documents():
     catalogue = []
-    if os.path.exists(vector_db_singleton.catalogue_path):
-        with open(vector_db_singleton.catalogue_path) as f:
+    cat_path = get_vector_db("system").local_database_catalogue_path
+    if os.path.exists(cat_path):
+        with open(cat_path, newline="") as f:
             lines = f.read().strip().splitlines()
             if lines:
                 for line in lines[1:]:
@@ -272,7 +331,8 @@ def openai_chat_completions(body: dict):
     if not use_rag:
         query = query[len("/norag"):].strip(": ").strip()
 
-    result = coach_singleton(query, use_rag=use_rag, mode=None)
+    coach = CoachingService(user_id="system")
+    result = coach(query, use_rag=use_rag, mode=None)
     answer = result.get("response", "")
     sources = result.get("sources", [])
 
@@ -374,7 +434,8 @@ def ollama_generate(body: dict):
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt required")
 
-    result = coach_singleton(prompt, use_rag=True, mode=None)
+    coach = CoachingService(user_id="system")
+    result = coach(prompt, use_rag=True, mode=None)
 
     # Normalize all possible return types to a plain text answer generator
     def _normalize_result(res):
@@ -440,7 +501,8 @@ def ollama_chat(body: dict):
         raise HTTPException(status_code=400, detail="user message required")
 
     query = user_msgs[-1]
-    result = coach_singleton(query, use_rag=True, mode=None)
+    coach = CoachingService(user_id="system")
+    result = coach(query, use_rag=True, mode=None)
 
     def _normalize_result(res):
         if isinstance(res, dict):

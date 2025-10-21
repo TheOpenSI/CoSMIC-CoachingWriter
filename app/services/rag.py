@@ -27,18 +27,17 @@ A triple of `(context, scores, kept)` where:
 """
 
 from .base import ServiceBase
-from .vector_database import vector_db_singleton
 from ..core.config import settings
 
 
 class RAG(ServiceBase):
     """Retrieval-augmented generation helper for context fetching."""
 
-    def __init__(self):
+    def __init__(self, vector_db):
         super().__init__()
         self.topk = settings.retrieve_topk
         self.threshold = settings.retrieve_score_threshold
-        self.vector_db = vector_db_singleton
+        self.vector_db = vector_db
 
     def __call__(self, query: str):
         """
@@ -105,6 +104,3 @@ class RAG(ServiceBase):
         context = "\n".join(f"[{k['id']}] {k['text']}" for k in kept)
         return context, scores, kept
 
-
-# Singleton instance for reuse across app
-rag_singleton = RAG()

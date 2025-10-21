@@ -155,7 +155,8 @@ class Pipeline:
             "query": query_with_safety,
             "use_rag": use_rag,
             "mode": mode,
-            "documents": documents
+            "documents": documents,
+            "user_id": uid
         }
 
         try:

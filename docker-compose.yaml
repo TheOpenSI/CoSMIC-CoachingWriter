@@ -24,14 +24,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
       interval: 20s
       retries: 40
     volumes:
       - ollama:/root/.ollama
-      - ./scripts/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
     restart: unless-stopped
     networks:
       - cosmic_net
@@ -109,7 +107,8 @@ services:
     environment:
       - OPENSI_COSMIC_API_BASE_URL=http://coaching-writer:8001
       # - MAX_QUERIES_PER_USER=10
-      - PIPELINES_URLS=https://github.com/TheOpenSI/CoSMIC-CoachingWriter/blob/main/pipelines/coaching_writer_pipeline.py
+      # - PIPELINES_URLS=https://github.com/TheOpenSI/CoSMIC-CoachingWriter/blob/main/pipelines/coaching_writer_pipeline.py
+      - PIPELINES_URLS=file:///ext_pipelines/coaching_writer_pipeline.py
     volumes:
       - ./pipelines:/ext_pipelines:ro
     depends_on:

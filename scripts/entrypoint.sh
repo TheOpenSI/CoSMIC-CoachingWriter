@@ -24,7 +24,7 @@ echo "[entrypoint] Reset file_list.csv"
 echo "[entrypoint] Starting Uvicorn on :8001 (reload=${RELOAD:-false})"
 
 if [ "${RELOAD:-false}" = "true" ]; then
-  exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+  exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --log-level debug
 else
-  exec uvicorn app.main:app --host 0.0.0.0 --port 8001
+  exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --log-level debug
 fi

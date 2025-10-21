@@ -23,7 +23,7 @@ Database layout:
 
 
 import os, glob, pytz, sys, csv
-
+from functools import lru_cache
 sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/../..")
 
 from datetime import datetime
@@ -113,6 +113,7 @@ class VectorDatabase(ServiceBase):
         self,
         document_analyser_model: str="gte-small",
         local_database_path: str="database/vector_db",
+        user_id: str | None = None,
         vector_database_update_threshold: float=0.98,
         device: str | None = None,
         **kwargs
@@ -130,6 +131,13 @@ class VectorDatabase(ServiceBase):
         """
         super().__init__(**kwargs)
 
+        # --- NEW: per-user path handling ---
+        if user_id:
+            local_database_path = os.path.join(local_database_path, user_id)
+        else:
+            local_database_path = os.path.join(local_database_path, "default")
+        os.makedirs(local_database_path, exist_ok=True)
+
         # Set config.
         # Set to absolute path.
         if local_database_path != "" and not os.path.isabs(local_database_path):
@@ -137,16 +145,13 @@ class VectorDatabase(ServiceBase):
 
         # Use default one.
         if not os.path.exists(local_database_path):
-            if local_database_path != "":
-                print(
-                    set_color(
-                        "warning",
-                        f"Vector database \"{local_database_path}\" not exist" \
-                        f", use default \"database/vector_database\"."
-                    )
+            os.makedirs(local_database_path, exist_ok=True)
+            print(
+                set_color(
+                    "info",
+                    f"Created new vector database directory at: {local_database_path}"
                 )
-
-            local_database_path = os.path.join(self.root, "database/vector_database")
+            )
 
         # Get the catalogue path and threshold.
         self.local_database_path = local_database_path
@@ -362,6 +367,9 @@ class VectorDatabase(ServiceBase):
         if document_processed:
             self.database.add_documents(document_processed)
             self.update_database_catalogue(filename)
+
+            print(set_color("debug", f"Saving FAISS index to {self.local_database_path}"))
+
             self.database.save_local(self.local_database_path)
             print(set_color("info", f"Added '{filename}' ({len(document_processed)} chunks)."))
         else:
@@ -410,5 +418,20 @@ class VectorDatabase(ServiceBase):
 
             return 0
 
-# Singleton instance
-vector_db_singleton = VectorDatabase()
+def get_vector_db(user_id: str | None = None):
+    """
+    Returns a VectorDatabase instance scoped either globally (system)
+    or per user/session, ensuring complete isolation between users.
+    """
+    base_dir = os.path.join("/app/database/vector_db")
+
+    if user_id in (None, "", "system"):
+        db_dir = os.path.join(base_dir, "system")
+    else:
+        # Each user gets their own folder under /app/database/vector_db/users/<id>
+        db_dir = os.path.join(base_dir, "users", str(user_id))
+
+    os.makedirs(db_dir, exist_ok=True)
+
+    # Pass it to the correct init parameter
+    return VectorDatabase(local_database_path=db_dir, user_id=user_id)

@@ -31,6 +31,7 @@ class QueryRequest(BaseModel):
     use_rag: bool = True
     mode: Optional[str] = None
     documents: Optional[List[Union[str, dict]]] = None
+    user_id: Optional[str] = None
 
 
 class TextIngestRequest(BaseModel):

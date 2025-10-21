@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from .api.routes import router
 from .core.config import settings
-from .services.vector_database import vector_db_singleton
+from .services.vector_database import get_vector_db
 from ollama import Client
 from .services.OllamaPullManager import OllamaPullManager
 
@@ -41,7 +41,8 @@ async def lifespan(app: FastAPI):
     folder = settings.academic_texts_dir
     if os.path.exists(folder):
         try:
-            vector_db_singleton.add_document_directory(folder)
+            system_vector_db = get_vector_db(user_id="system")
+            system_vector_db.add_document_directory(folder)
             print(f"[startup] Loaded PDFs from {folder}")
         except Exception as e:
             print(f"[startup] Failed to ingest PDFs: {e}")
