@@ -195,14 +195,14 @@ pytest -q
 ## Future Enhancements
 
 * Streaming for OpenAI-compatible endpoint.
-* Auth (API key / JWT) & rate limiting.
+* Custom Front End Application
 * Section-aware structural analysis.
 * Citation quality assessment & reference normalization.
-* Evaluation harness with golden feedback pairs.
 * Web RAG retrieval: fetch and chunk web pages as additional context sources (with allowlist/robots handling and basic content cleaning).
 
 ## License
 
 Inherit CoSMIC project licensing; ensure compliance with model provider (Gemma / Ollama / Hugging Face) licenses where applicable.
+
 
 
